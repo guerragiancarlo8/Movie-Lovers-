@@ -6,12 +6,16 @@ require 'imdb'
 
 require 'random_word_generator'
 
-rand_word = RandomWordGenerator.word
-pregunta = ""
-correct=0
-wrong=0
-total=0
+require_relative './lib/gameenvsetup.rb'
 
+require_relative './lib/moviesetup.rb'
+
+require_relative './lib/questionsetup.rb'
+
+require_relative './lib/resultsparser.rb'
+
+
+game = GameEnvSetup.new
 
 
 get '/' do
@@ -22,40 +26,37 @@ end
 
 post '/search' do
 
-	puts rand_word
-	i = Imdb::Search.new(rand_word)
-	#Imdb::Search.new(RandomWordGenerator.word)
 
+	movies = MovieSetup.new(game.random_word)
 
-	array_of_movies = i.movies
-	@movies = []
+	movies.load_movies_into_movies_array
 
-	#@movies = array_of_movies[0,8].map{|x| x if !x.poster.nil? }
+	question = QuestionSetup.new(movies.movies)
 
-	count = 0
-	array_of_movies.each do |movie|
-		if count < 9
-			if !movie.poster.nil?
-				@movies.push(movie)
-				count += 1
-			end
-		end
-	end
+	@question = question.randomize_question
+	#esto ahora es un doble array, [0] = pregunta, [1] = respuesta
+	game.question = @question
 
-	random_integer = Random.new.rand(9)
+	@movies = movies.movies
 
-	questions = ["Which movie was released in "+ (array_of_movies[random_integer].year).to_s+ " ?","In which movie was " + array_of_movies[random_integer].cast_members[0] + " an actor?"]
-
-	puts array_of_movies[random_integer].title
-	@question = questions[Random.new.rand(2)]
-	pregunta = @question
 	erb(:results)
 end
 
 post '/result' do
-	movie_clicked = Imdb::Movie.new(params['answer'])
+
+	results_parser = ResultsParser.new((Imdb::Movie.new(params['answer'])),game)
 	
-	puts "la pregunta es " + pregunta
+	results_parser.load_movie_attributes_for_selected_movie
+
+	if results_parser.validate_answer(game.question,results_parser.movie_attributes)
+		erb(:success)
+	else
+		erb(:failure)
+	end
+end
+
+=begin
+	results_parser.validate_answer(game.question,)
 	if pregunta.include? "was released in"
 
 		if pregunta.include? (movie_clicked.year).to_s
@@ -88,12 +89,10 @@ post '/result' do
 			erb(:failure)
 		end
 	end
+=end
 
-end
 
 get '/final' do
-	@correct = correct.to_s
-	@wrong = wrong.to_s
-	@total = @correct + "/" + total.to_s
+	@game = game
 	erb(:final)
 end
